@@ -3,9 +3,9 @@ name: Update Learning README
 on:
   push:
     branches:
-      - main  # Change to your default branch if different
+      - master  
     paths-ignore:
-      - 'README.md'  # Prevent infinite loops
+      - 'README.md'
 
 jobs:
   update-readme:
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          fetch-depth: 2  # Fetch last 2 commits to compare changes
+          fetch-depth: 2
       
       - name: Set up Python
         uses: actions/setup-python@6
