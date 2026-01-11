@@ -1,0 +1,197 @@
+name: Update Learning README
+
+on:
+  push:
+    branches:
+      - main  # Change to your default branch if different
+    paths-ignore:
+      - 'README.md'  # Prevent infinite loops
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2  # Fetch last 2 commits to compare changes
+      
+      - name: Set up Python
+        uses: actions/setup-python@6
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install google-generativeai
+      
+      - name: Detect changed files
+        id: changes
+        run: |
+          # Get list of changed files (excluding README.md)
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep -v "README.md" || true)
+          echo "Changed files: $CHANGED_FILES"
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Generate summary using Gemini
+        if: steps.changes.outputs.files != ''
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import os
+          import google.generativeai as genai
+          import subprocess
+          from datetime import datetime
+          
+          # Get changed files
+          changed_files = """${{ steps.changes.outputs.files }}"""
+          
+          if not changed_files.strip():
+              print("No files changed, skipping summary generation")
+              exit(0)
+          
+          # Read content of changed files
+          files_content = []
+          for file in changed_files.strip().split('\n'):
+              if file and os.path.exists(file):
+                  try:
+                      with open(file, 'r', encoding='utf-8') as f:
+                          content = f.read()
+                          files_content.append(f"File: {file}\n\n{content}\n")
+                  except Exception as e:
+                      print(f"Error reading {file}: {e}")
+          
+          if not files_content:
+              print("No readable files found")
+              exit(0)
+          
+          # Configure Gemini
+          genai.configure(api_key=os.environ.get("${{secrets.GEMINI_API_KEY}}"))
+          model = genai.GenerativeModel('gemini-pro')
+          
+          # Create prompt for Gemini
+          prompt = f"""Based on the following code changes in a Spring learning repository, create a concise summary of what was learned today.
+
+            Changed files and content:
+            {''.join(files_content)}
+
+            Please provide:
+            1. A brief title for today's learning (e.g., "Spring Data JPA Relationships")
+            2. A 2-3 sentence summary of the key concepts covered
+            3. 3-5 bullet points of specific learnings
+
+            Format your response as:
+            TITLE: [title here]
+            SUMMARY: [summary here]
+            LEARNINGS:
+            - [point 1]
+            - [point 2]
+            - [point 3]
+            """
+                    
+                    # Call Gemini API
+                    response = model.generate_content(prompt)
+                    summary = response.text
+                    
+                    # Save summary to file
+                    with open('learning_summary.txt', 'w') as f:
+                        f.write(summary)
+                    
+                    print("Summary generated successfully")
+                    PYTHON_SCRIPT
+                
+                - name: Update README
+                    if: steps.changes.outputs.files != ''
+                    run: |
+                    python << 'PYTHON_SCRIPT'
+                    import os
+                    from datetime import datetime
+                    
+                    # Read the generated summary
+                    if not os.path.exists('learning_summary.txt'):
+                        print("No summary file found")
+                        exit(0)
+                    
+                    with open('learning_summary.txt', 'r') as f:
+                        summary = f.read()
+                    
+                    # Parse summary
+                    lines = summary.strip().split('\n')
+                    title = ""
+                    summary_text = ""
+                    learnings = []
+                    
+                    current_section = None
+                    for line in lines:
+                        if line.startswith("TITLE:"):
+                            title = line.replace("TITLE:", "").strip()
+                        elif line.startswith("SUMMARY:"):
+                            summary_text = line.replace("SUMMARY:", "").strip()
+                            current_section = "summary"
+                        elif line.startswith("LEARNINGS:"):
+                            current_section = "learnings"
+                        elif line.startswith("-") and current_section == "learnings":
+                            learnings.append(line.strip())
+                        elif current_section == "summary" and line.strip():
+                            summary_text += " " + line.strip()
+                    
+                    # Get today's date
+                    today = datetime.now().strftime("%B %d, %Y")
+                    
+                    # Create new entry
+                    new_entry = f"""
+            ### Day {datetime.now().strftime('%Y-%m-%d')} - {title}
+            **Date:** {today}
+
+            {summary_text}
+
+            **Key Learnings:**
+            {chr(10).join(learnings)}
+
+            ---
+            """
+                    
+                    # Read existing README
+                    readme_path = 'README.md'
+                    if os.path.exists(readme_path):
+                        with open(readme_path, 'r') as f:
+                            readme_content = f.read()
+                    else:
+                        readme_content = """# Spring Daily Learning Journey
+
+            This repository contains my daily learnings while studying Spring Framework.
+
+            ## Learning Log
+
+            ---
+            """
+                    
+                    # Insert new entry after "## Learning Log"
+                    if "## Learning Log" in readme_content:
+                        parts = readme_content.split("## Learning Log", 1)
+                        updated_readme = parts[0] + "## Learning Log\n" + new_entry + parts[1].split("---", 1)[-1]
+                    else:
+                        updated_readme = readme_content + "\n## Learning Log\n" + new_entry
+                    
+                    # Write updated README
+                    with open(readme_path, 'w') as f:
+                        f.write(updated_readme)
+                    
+                    print("README updated successfully")
+                    PYTHON_SCRIPT
+                
+                - name: Commit and push changes
+                    if: steps.changes.outputs.files != ''
+                    run: |
+                    git config --local user.email "github-actions[bot]@users.noreply.github.com"
+                    git config --local user.name "github-actions[bot]"
+                    git add README.md
+                    git diff --staged --quiet || git commit -m "📚 Auto-update: Daily learning summary for $(date +'%Y-%m-%d')"
+                    git push
