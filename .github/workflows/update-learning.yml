@@ -41,7 +41,7 @@ jobs:
       - name: Generate summary using Gemini
         if: steps.changes.outputs.files != ''
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}"
         run: |
           python << 'PYTHON_SCRIPT'
           import os
@@ -72,8 +72,8 @@ jobs:
               exit(0)
           
           # Configure Gemini
-          genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-          model = genai.GenerativeModel('gemini-pro')
+          genai.configure(api_key=os.environ.get("${{ secrets.GEMINI_API_KEY }}"))
+          model = genai.GenerativeModel('gemini-1.5-flash')
           
           # Create prompt for Gemini
           prompt = f"""Based on the following code changes in a Spring learning repository, create a concise summary of what was learned today.
