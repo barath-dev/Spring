@@ -96,7 +96,7 @@ jobs:
           
           # Call Gemini API
           response = client.models.generate_content(
-              model='models/gemini-1.5-flash-latest',
+              model='gemini-pro',
               contents=prompt
           )
           summary = response.text
