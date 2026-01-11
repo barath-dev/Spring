@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 2
       
       - name: Set up Python
-        uses: actions/setup-python@releases/v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9.12'
       
@@ -72,7 +72,7 @@ jobs:
               exit(0)
           
           # Configure Gemini
-          genai.configure(api_key=os.environ.get("${{secrets.GEMINI_API_KEY}}"))
+          genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
           model = genai.GenerativeModel('gemini-pro')
           
           # Create prompt for Gemini
@@ -94,59 +94,59 @@ jobs:
             - [point 2]
             - [point 3]
             """
-                    
-                    # Call Gemini API
-                    response = model.generate_content(prompt)
-                    summary = response.text
-                    
-                    # Save summary to file
-                    with open('learning_summary.txt', 'w') as f:
-                        f.write(summary)
-                    
-                    print("Summary generated successfully")
-                    PYTHON_SCRIPT
-                
-                - name: Update README
-                    if: steps.changes.outputs.files != ''
-                    run: |
-                    python << 'PYTHON_SCRIPT'
-                    import os
-                    from datetime import datetime
-                    
-                    # Read the generated summary
-                    if not os.path.exists('learning_summary.txt'):
-                        print("No summary file found")
-                        exit(0)
-                    
-                    with open('learning_summary.txt', 'r') as f:
-                        summary = f.read()
-                    
-                    # Parse summary
-                    lines = summary.strip().split('\n')
-                    title = ""
-                    summary_text = ""
-                    learnings = []
-                    
-                    current_section = None
-                    for line in lines:
-                        if line.startswith("TITLE:"):
-                            title = line.replace("TITLE:", "").strip()
-                        elif line.startswith("SUMMARY:"):
-                            summary_text = line.replace("SUMMARY:", "").strip()
-                            current_section = "summary"
-                        elif line.startswith("LEARNINGS:"):
-                            current_section = "learnings"
-                        elif line.startswith("-") and current_section == "learnings":
-                            learnings.append(line.strip())
-                        elif current_section == "summary" and line.strip():
-                            summary_text += " " + line.strip()
-                    
-                    # Get today's date
-                    today = datetime.now().strftime("%B %d, %Y")
-                    
-                    # Create new entry
-                    new_entry = f"""
-            ### Day {datetime.now().strftime('%Y-%m-%d')} - {title}
+          
+          # Call Gemini API
+          response = model.generate_content(prompt)
+          summary = response.text
+          
+          # Save summary to file
+          with open('learning_summary.txt', 'w') as f:
+              f.write(summary)
+          
+          print("Summary generated successfully")
+          PYTHON_SCRIPT
+      
+      - name: Update README
+        if: steps.changes.outputs.files != ''
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import os
+          from datetime import datetime
+          
+          # Read the generated summary
+          if not os.path.exists('learning_summary.txt'):
+              print("No summary file found")
+              exit(0)
+          
+          with open('learning_summary.txt', 'r') as f:
+              summary = f.read()
+          
+          # Parse summary
+          lines = summary.strip().split('\n')
+          title = ""
+          summary_text = ""
+          learnings = []
+          
+          current_section = None
+          for line in lines:
+              if line.startswith("TITLE:"):
+                  title = line.replace("TITLE:", "").strip()
+              elif line.startswith("SUMMARY:"):
+                  summary_text = line.replace("SUMMARY:", "").strip()
+                  current_section = "summary"
+              elif line.startswith("LEARNINGS:"):
+                  current_section = "learnings"
+              elif line.startswith("-") and current_section == "learnings":
+                  learnings.append(line.strip())
+              elif current_section == "summary" and line.strip():
+                  summary_text += " " + line.strip()
+          
+          # Get today's date
+          today = datetime.now().strftime("%B %d, %Y")
+          
+          # Create new entry
+          new_entry = f"""
+
             **Date:** {today}
 
             {summary_text}
