@@ -22,11 +22,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9.12'
+          python-version: '3.11'
       
       - name: Install dependencies
         run: |
-          pip install google-generativeai
+          pip install google-genai
       
       - name: Detect changed files
         id: changes
@@ -41,12 +41,12 @@ jobs:
       - name: Generate summary using Gemini
         if: steps.changes.outputs.files != ''
         env:
-          GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python << 'PYTHON_SCRIPT'
           import os
-          import google.generativeai as genai
-          import subprocess
+          from google import genai
+          from google.genai import types
           from datetime import datetime
           
           # Get changed files
@@ -71,9 +71,8 @@ jobs:
               print("No readable files found")
               exit(0)
           
-          # Configure Gemini
-          genai.configure(api_key=os.environ.get("${{ secrets.GEMINI_API_KEY }}"))
-          model = genai.GenerativeModel('gemini-1.5-flash-002')
+          # Configure Gemini client
+          client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
           
           # Create prompt for Gemini
           prompt = f"""Based on the following code changes in a Spring learning repository, create a concise summary of what was learned today.
@@ -96,7 +95,10 @@ jobs:
             """
           
           # Call Gemini API
-          response = model.generate_content(prompt)
+          response = client.models.generate_content(
+              model='gemini-1.5-flash',
+              contents=prompt
+          )
           summary = response.text
           
           # Save summary to file
@@ -146,51 +148,50 @@ jobs:
           
           # Create new entry
           new_entry = f"""
-
             **Date:** {today}
 
             {summary_text}
 
-            **Key Learnings:**
-            {chr(10).join(learnings)}
+                **Key Learnings:**
+                {chr(10).join(learnings)}
 
-            ---
-            """
-                    
-                    # Read existing README
-                    readme_path = 'README.md'
-                    if os.path.exists(readme_path):
-                        with open(readme_path, 'r') as f:
-                            readme_content = f.read()
-                    else:
-                        readme_content = """# Spring Daily Learning Journey
+                ---
+                """
+                        
+                        # Read existing README
+                        readme_path = 'README.md'
+                        if os.path.exists(readme_path):
+                            with open(readme_path, 'r') as f:
+                                readme_content = f.read()
+                        else:
+                            readme_content = """# Spring Daily Learning Journey
 
-            This repository contains my daily learnings while studying Spring Framework.
+                This repository contains my daily learnings while studying Spring Framework.
 
-            ## Learning Log
+                ## Learning Log
 
-            ---
-            """
+                ---
+                """
+                        
+                        # Insert new entry after "## Learning Log"
+                        if "## Learning Log" in readme_content:
+                            parts = readme_content.split("## Learning Log", 1)
+                            updated_readme = parts[0] + "## Learning Log\n" + new_entry + parts[1].split("---", 1)[-1]
+                        else:
+                            updated_readme = readme_content + "\n## Learning Log\n" + new_entry
+                        
+                        # Write updated README
+                        with open(readme_path, 'w') as f:
+                            f.write(updated_readme)
+                        
+                        print("README updated successfully")
+                        PYTHON_SCRIPT
                     
-                    # Insert new entry after "## Learning Log"
-                    if "## Learning Log" in readme_content:
-                        parts = readme_content.split("## Learning Log", 1)
-                        updated_readme = parts[0] + "## Learning Log\n" + new_entry + parts[1].split("---", 1)[-1]
-                    else:
-                        updated_readme = readme_content + "\n## Learning Log\n" + new_entry
-                    
-                    # Write updated README
-                    with open(readme_path, 'w') as f:
-                        f.write(updated_readme)
-                    
-                    print("README updated successfully")
-                    PYTHON_SCRIPT
-                
-                - name: Commit and push changes
-                    if: steps.changes.outputs.files != ''
-                    run: |
-                    git config --local user.email "github-actions[bot]@users.noreply.github.com"
-                    git config --local user.name "github-actions[bot]"
-                    git add README.md
-                    git diff --staged --quiet || git commit -m "📚 Auto-update: Daily learning summary for $(date +'%Y-%m-%d')"
-                    git push
+            - name: Commit and push changes
+                if: steps.changes.outputs.files != ''
+                run: |
+                git config --local user.email "github-actions[bot]@users.noreply.github.com"
+                git config --local user.name "github-actions[bot]"
+                git add README.md
+                git diff --staged --quiet || git commit -m "📚 Auto-update: Daily learning summary for $(date +'%Y-%m-%d')"
+                git push
