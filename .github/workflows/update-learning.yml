@@ -31,7 +31,6 @@ jobs:
       - name: Detect changed files
         id: changes
         run: |
-          # Get list of changed files (excluding README.md)
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep -v "README.md" || true)
           echo "Changed files: $CHANGED_FILES"
           echo "files<<EOF" >> $GITHUB_OUTPUT
@@ -49,14 +48,12 @@ jobs:
           from google.genai import types
           from datetime import datetime
           
-          # Get changed files
           changed_files = """${{ steps.changes.outputs.files }}"""
           
           if not changed_files.strip():
               print("No files changed, skipping summary generation")
               exit(0)
           
-          # Read content of changed files
           files_content = []
           for file in changed_files.strip().split('\n'):
               if file and os.path.exists(file):
@@ -71,37 +68,33 @@ jobs:
               print("No readable files found")
               exit(0)
           
-          # Configure Gemini client
           client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
           
-          # Create prompt for Gemini
           prompt = f"""Based on the following code changes in a Spring learning repository, create a concise summary of what was learned today.
 
-            Changed files and content:
-            {''.join(files_content)}
+          Changed files and content:
+          {''.join(files_content)}
 
-            Please provide:
-            1. A brief title for today's learning (e.g., "Spring Data JPA Relationships")
-            2. A 2-3 sentence summary of the key concepts covered
-            3. 3-5 bullet points of specific learnings
+          Please provide:
+          1. A brief title for today's learning (e.g., "Spring Data JPA Relationships")
+          2. A 2-3 sentence summary of the key concepts covered
+          3. 3-5 bullet points of specific learnings
 
-            Format your response as:
-            TITLE: [title here]
-            SUMMARY: [summary here]
-            LEARNINGS:
-            - [point 1]
-            - [point 2]
-            - [point 3]
-            """
+          Format your response as:
+          TITLE: [title here]
+          SUMMARY: [summary here]
+          LEARNINGS:
+          - [point 1]
+          - [point 2]
+          - [point 3]
+          """
           
-          # Call Gemini API
           response = client.models.generate_content(
-              model='gemini-3-flash-preview',
+              model='gemini-2.0-flash-exp',
               contents=prompt
           )
           summary = response.text
           
-          # Save summary to file
           with open('learning_summary.txt', 'w') as f:
               f.write(summary)
           
@@ -115,7 +108,6 @@ jobs:
           import os
           from datetime import datetime
           
-          # Read the generated summary
           if not os.path.exists('learning_summary.txt'):
               print("No summary file found")
               exit(0)
@@ -123,7 +115,6 @@ jobs:
           with open('learning_summary.txt', 'r') as f:
               summary = f.read()
           
-          # Parse summary
           lines = summary.strip().split('\n')
           title = ""
           summary_text = ""
@@ -143,55 +134,51 @@ jobs:
               elif current_section == "summary" and line.strip():
                   summary_text += " " + line.strip()
           
-          # Get today's date
           today = datetime.now().strftime("%B %d, %Y")
           
-          # Create new entry
           new_entry = f"""
-            **Date:** {today}
-
-            {summary_text}
-
-                **Key Learnings:**
-                {chr(10).join(learnings)}
-
-                ---
-                """
-                        
-                        # Read existing README
-                        readme_path = 'README.md'
-                        if os.path.exists(readme_path):
-                            with open(readme_path, 'r') as f:
-                                readme_content = f.read()
-                        else:
-                            readme_content = """# Spring Daily Learning Journey
-
-                This repository contains my daily learnings while studying Spring Framework.
-
-                ## Learning Log
-
-                ---
-                """
-                        
-                        # Insert new entry after "## Learning Log"
-                        if "## Learning Log" in readme_content:
-                            parts = readme_content.split("## Learning Log", 1)
-                            updated_readme = parts[0] + "## Learning Log\n" + new_entry + parts[1].split("---", 1)[-1]
-                        else:
-                            updated_readme = readme_content + "\n## Learning Log\n" + new_entry
-                        
-                        # Write updated README
-                        with open(readme_path, 'w') as f:
-                            f.write(updated_readme)
-                        
-                        print("README updated successfully")
-                        PYTHON_SCRIPT
-                    
-            - name: Commit and push changes
-                if: steps.changes.outputs.files != ''
-                run: |
-                git config --local user.email "github-actions[bot]@users.noreply.github.com"
-                git config --local user.name "github-actions[bot]"
-                git add README.md
-                git diff --staged --quiet || git commit -m "📚 Auto-update: Daily learning summary for $(date +'%Y-%m-%d')"
-                git push
+          ### Day {datetime.now().strftime('%Y-%m-%d')} - {title}
+          **Date:** {today}
+          
+          {summary_text}
+          
+          **Key Learnings:**
+          {chr(10).join(learnings)}
+          
+          ---
+          """
+          
+          readme_path = 'README.md'
+          if os.path.exists(readme_path):
+              with open(readme_path, 'r') as f:
+                  readme_content = f.read()
+          else:
+              readme_content = """# Spring Daily Learning Journey
+          
+          This repository contains my daily learnings while studying Spring Framework.
+          
+          ## Learning Log
+          
+          ---
+          """
+          
+          if "## Learning Log" in readme_content:
+              parts = readme_content.split("## Learning Log", 1)
+              updated_readme = parts[0] + "## Learning Log\n" + new_entry + parts[1].split("---", 1)[-1]
+          else:
+              updated_readme = readme_content + "\n## Learning Log\n" + new_entry
+          
+          with open(readme_path, 'w') as f:
+              f.write(updated_readme)
+          
+          print("README updated successfully")
+          PYTHON_SCRIPT
+      
+      - name: Commit and push changes
+        if: steps.changes.outputs.files != ''
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add README.md
+          git diff --staged --quiet || git commit -m "📚 Auto-update: Daily learning summary for $(date +'%Y-%m-%d')"
+          git push
